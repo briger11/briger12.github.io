@@ -1,0 +1,1137 @@
+// mac os 일 경우 html 태그에 mac_os 클래스 붙임
+if (navigator.userAgent.indexOf('Mac OS X') != -1) {
+    $("html").addClass("mac-os");
+}
+
+!function($) {
+	'use strict';
+
+	$(function(){
+        initUI.setup();
+	});
+
+	var initUI = (function(){
+		var isLoaded;
+
+		function setup(){
+			if(isLoaded){
+				return;
+			}
+            isLoaded = true;
+
+
+			// ex)
+            // registUI('.sample_class', uiSampleFunction, false);
+
+            registUI('.select2-js', selectbox2, false); // 디자인 셀렉트 박스 공통
+            registUI('.input-custom', inputFunction, true); // 인풋 포커스 할 때 라벨 모션 관련
+            registUI('.ui-accordion', accordionFunc, false); // 아코디언 공통
+            registUI('.ui-pop-over', uiPopoverFunc, false); // 팝오버 공통. 생성자를 받아와 사용합니다.
+            registUI('.ui-tooltip', uiTooltipFunc, false); // 툴팁 공통. 생성자를 받아와 사용합니다.
+            registUI('.ui-file-input', inputFileName, false); // 파일 등록 인풋 관련
+            registUI('.ui-tab-wrap', tabFunc, false); // 탭 공통. 탭 내부에 탭 존재시 해당 pug 하단에 따로 작성하였습니다.
+            registUI('.progress-circle', progressBar, false);
+            setTimeout(function () {
+                registUI('.header-content', headerFunc, false); // 헤더와 관련된 모든 함수 (gnb, lnb 등등)
+            }, 0)
+            registUI('.side-notice-area', sideNoticeArea, false); // 분양 페이지에 있는 사이드 알림창 관련
+            registUI('.family-site-wrap', moSelectOnchange, false);
+
+            // registUI('.apt-body', moveTop, false);
+
+            // 평으로 보기, m2 로 보기 전환 스위치
+            $('.ui-check-switch').each(function () {
+                var _this = $(this);
+
+                setTimeout(function () {
+                    var checkSwitch = new CheckSwitch();
+                    checkSwitch.init(_this);
+                }, 0)
+            })
+
+            // 레이어 팝업과 토스트 팝업은 onclick 으로 전 페이지에서 쓰기 때문에 전역 변수로 넣어놨습니다.
+            window.$toastPopup = new ToastUiPopup();
+            window.$layerPopup = new LayerPopup();
+
+            // 최초 로딩 시 분양에서 개요를 제외한 페이지에서 키비주얼을 건너 뛰어 lnb 부분까지 스크롤을 움직입니다.
+            // .apt-body 가 존재하지만 .apt-side-menu-on 이 없다면 실행됩니다.
+            if (!$('.apt-side-menu-on')[0] && $('.apt-body')[0]) {
+                var _targetTop = $('.lnb-tab-menu').offset().top;
+
+                TweenMax.set($('html, body'), { scrollTo: { y: _targetTop }, onComplete : function(){
+                    $('.page-loading').remove()
+                }})
+            }
+
+            // clipboard
+            (function clipboardFunc () {
+                var _btn = document.getElementsByClassName('ui-clipboard');
+
+                if (!_btn[0]) return;
+
+                var _clipboard = new ClipboardJS(_btn);
+
+                // _clipboard.on('success', function(e) {
+                //     // console.log(e);
+                // });
+
+                // _clipboard.on('error', function(e) {
+                //     // console.log(e);
+                // });
+            })();
+
+            // 공유하기 버튼
+            (function clickSns () {
+                var snsBtn = $('.btn-util02'),
+                    shareEl = $('.share-layer01');
+
+                snsBtn.on('click', function () {
+
+                    if (!$(this).hasClass('on')) {
+                        $(this).addClass('on');
+                        shareEl.css('display','block')
+                    } else {
+                        $(this).removeClass('on');
+                        shareEl.css('display','none')
+                    }
+
+                });
+            })();
+
+		}
+
+		function registUI(el, fn, saveData){
+			if(saveData === undefined){
+				saveData = true;
+			}
+
+			var _inst;
+
+			$(el).each(function(idx, obj){
+				_inst = new fn();
+                _inst.init(obj, el);
+
+				if(saveData){
+					$(el).data('_inst', _inst);
+				}
+			});
+		}
+
+		return {
+			setup: setup
+		};
+	})();
+}(jQuery);
+
+// 개발자 함수. 브라우저에서 바로 바로 확인 가능합니다!
+window.devFunction = function () {
+
+	function testFunction () {
+
+		return this;
+    };
+
+	return {
+        testFunction : testFunction,
+	}
+};
+
+// toast popup
+var ToastUiPopup = function () {
+    var $timer, $el;
+
+    (function init () {
+
+    })();
+
+    this.open = function (_el) {
+        $el = $(_el);
+
+        clearTimeout($timer);
+
+        $el.addClass('fixed');
+
+        TweenMax.fromTo($el, 0.8, {y: $el.height(), opacity: 0},{y: 0, opacity: 1, 'display':'block', ease: Power4.easeOut});
+
+        _setTimeout();
+    }
+
+    this.close = function () {
+        clearTimeout($timer);
+
+        TweenMax.to($el, 0.4, {opacity: 0, 'display': 'none', ease: Power4.easeOut, onComplete: function () {
+            $el.removeClass('fixed');
+        }});
+    }
+
+    function _setTimeout () {
+        $timer = setTimeout(function () {
+            $toastPopup.close($el);
+        }, 5000);
+    }
+};
+
+// layer popup
+var LayerPopup = function () {
+    var $dimm, zIndex;
+    var viewport = document.querySelector("meta[name=viewport]");
+
+    (function init () {
+        $dimm = $('.dimm');
+
+        // 팝업의 기존 설정된 z-index 값을 저장해둡니다.
+        zIndex =  $('.popup-wrap').css('z-index');
+    })();
+
+    this.open = function (_el, _callback) {
+        var $el = $(_el);
+
+        // 한페이지에 팝업이 두개가 뜰 수도 있기 때문에
+        // 원하는 팝업을 열기 전
+        // 모든 팝업의 z-index 를 -10 으로 바꾸고,
+        $('.popup-wrap').css('z-index', zIndex - 10);
+
+        $el.css({'display':'flex', 'z-index': zIndex});
+
+        if (_callback) {
+            setTimeout(_callback, 0);
+        }
+
+        // 오픈 함수가 실행됐을 때, 만약 딤이 켜져있다면
+        if ($dimm.is(':visible') == true && !$('.gnb-wrap').is(':visible') == true) {
+            // 팝업이 하나 더 켜져있는 것이니
+            $dimm.attr('popups', 'true');
+            // 아래 함수는 리턴한다.
+            return false;
+        }
+
+        openDimm();
+        disableScroll();
+
+        viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=1');
+    }
+
+    this.close = function (_el, _callback) {
+        var $el = $(_el);
+
+        if (_callback) {
+            setTimeout(_callback, 0);
+        }
+
+        $el.css({
+            'display':'none',
+        })
+
+        // 팝업이 켜져있으면
+        if ($dimm.attr('popups') == 'true') {
+            // 모두 꺼버리면서
+            $dimm.attr('popups', 'false');
+            // 모든 팝업의 z-index 를 원복한다
+            $('.popup-wrap').css('z-index', zIndex);
+
+            return false;
+        }
+
+        closeDimm();
+        ableScroll();
+        viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+    }
+
+    function openDimm () {
+        //$dimm.css('display','block');
+        TweenMax.fromTo($dimm, 0.4, {opacity: 0}, {opacity: 0.8, 'display': 'block', ease: Power4.easeOut});
+    }
+
+    function closeDimm () {
+        TweenMax.to($dimm, 0.4, {opacity: 0, 'display': 'none', ease: Power4.easeOut});
+    }
+
+    function ableScroll () {
+        $dimm.css('display','none');
+        // $('html, body').removeAttr('style');
+        $('html, body').css('overflow','');
+    }
+
+    function disableScroll () {
+
+        $('html, body').css('overflow','hidden');
+    }
+};
+
+// select box
+var selectbox2 = function () {
+    var $el, $opt;
+
+    this.init = function (_el) {
+        $el = $(_el);
+
+        if ($el.hasClass('large')) {
+            $opt = {
+                theme: "daelim",
+                width: 'style',
+                dropdownParent: $el.parents('.select-custom.large'),
+                placeholder: "선택하세요",
+            };
+        } else if ($el.hasClass('no-search')) {
+            $opt = {
+                theme: "daelim",
+                width: 'style',
+                dropdownParent: $el.parents('.select-custom'),
+                minimumResultsForSearch: Infinity,
+            };
+        } else { // default
+            $opt = {
+                theme: "daelim",
+                width: 'style',
+                dropdownParent: $el.parents('.select-custom'),
+                placeholder: "",
+            };
+        }
+        setSelect();
+
+        bindEvent();
+    }
+
+    function setSelect () {
+        $el.select2($opt);
+
+        var _disabled = $el.attr('disabled') ? true : false;
+        if (_disabled) {
+            $el.prev('label').addClass('on-disabled');
+        }
+
+        $el.parents('.select').css('opacity', 1);
+
+        if ($('#select2-select-test002-container').attr('title')) {
+            $el.prev('label').addClass('on');
+        }
+    }
+
+    function bindEvent () {
+        // open
+        $el.on('select2:open', function () {
+            $(this).prev('label').addClass('on');
+        })
+
+        // select
+        $el.on('select2:select', function () {
+            $(this).prev('label').addClass('on');
+            $(this).addClass('selected');
+        })
+
+        // clear
+        $el.on('select2:clear', function () {
+            $(this).removeClass('selected');
+        })
+
+        // close
+        $el.on('select2:close', function () {
+            var _this = $(this);
+
+            setTimeout(function () {
+                var selectText = $el.next().find('.select2-selection__rendered').html();
+                var _bool = !_this.hasClass('selected') ? false : true;
+
+                if (selectText == "" && _bool == false) {
+                    _this.prev('label').removeClass('on');
+                }
+            }, 0);
+        })
+    }
+
+}
+
+var inputFunction = function () {
+    var $el, $input, $label;
+
+    this.init = function (_el) {
+        setTimeout(function () {
+            $el = $(_el);
+            $input = $el.find('input');
+            $label = $el.find('label')
+
+            if ($input.val()) {
+                $label.addClass('on');
+            }
+
+            bindEvent();
+        }, 0)
+    }
+
+    function bindEvent () {
+        $input.on('focusout',function(){
+            var _text = $input.val(),
+                _valLength = _text.length;
+
+            if(_valLength >= 1 ){
+                $label.addClass('on');
+            }else if(_valLength == 0){
+                $label.removeClass('on');
+            }
+        })
+    }
+}
+
+var accordionFunc = function () { // .ui-accordion
+    var $el, $btn, $openEl;
+
+    this.init = function (_el) {
+        $el = $(_el);
+        $btn = $el.find('button');
+        $openEl = $el.find('.accordion-contents');
+
+        bindEvent();
+
+        return this;
+    }
+
+    function bindEvent () {
+        $btn.on('click', function (e) {
+            e.preventDefault();
+            var _thisBtn = $(this);
+            var _thisOpenEl = _thisBtn.next('.accordion-contents');
+
+            if (!_thisBtn.hasClass('on')) {
+                _thisBtn.addClass('on');
+                _thisOpenEl.slideDown(400, function () {
+                    TweenMax.to($('html, body'), 0.4, { scrollTo: { y: _thisOpenEl.closest('.accordion-wrap').offset().top - $('.lnb-tab-menu').outerHeight() }})
+                });
+
+                $btn.not(_thisBtn).removeClass('on');
+                $openEl.not(_thisOpenEl).slideUp();
+
+            } else {
+                $btn.removeClass('on');
+                $openEl.slideUp();
+
+            }
+        })
+    }
+}
+
+// popover 와 tooltip 생성자.
+var PopoverTootip = function () {
+    var $el, $closeBtn, $popover, $top, $bottom;
+
+    this.init = function (_opt) {
+
+        /**
+         *
+         *  el : element
+         *  evt : mouse event
+         *
+         */
+
+        makePopoverDiv();
+
+        $el = $(_opt.el);
+
+        // select type
+        var _type = $el.attr('data-type');
+
+        switch (_type) {
+            case 'type01' :
+                $popover = $('.popover-area.type01');
+
+            break;
+
+            case 'type02' :
+                $popover = $('.popover-area.type02');
+
+            break;
+
+            case 'etc' :
+                var _select = $el.attr('data-select');
+
+                $popover = $(_select);
+
+            break;
+        }
+
+        // 임시로 넣어놨습니다.!
+        if (!$popover) return false;
+
+        $closeBtn = $popover.find('.btn-close-popover');
+
+        bindEvent(_opt.evt);
+    };
+
+    function bindEvent (_evt, _type) {
+        // set position
+        $el.on(_evt, function (e) {
+            e.preventDefault();
+
+            // init popver or tooltip when click
+            setCloseBtn(_evt);
+            changeTxt();
+
+            changePosition();
+        })
+
+        // close function
+        if (_evt == 'click') { // popover
+            $closeBtn.on(_evt, function (e) {
+                e.preventDefault();
+
+                $popover.css('display','none');
+            });
+        } else { // tooltip
+            $el.on('mouseleave', function (e) {
+                e.preventDefault();
+
+                $popover.css('display','none');
+            });
+        }
+    }
+
+    // 팝오버 or 툴팁 동적 생성.
+    function makePopoverDiv () {
+        var _type01 = '<div class="popover-area type01"><div class="popover-container"><span class="bu" aria-hidden="true"></span><div class="popover-header"><i class="ico-question" arir-hidden="true"></i><span class="tit">보증기간</span></div><div class="popover-content"><div class="popover-item"><span class="bu bg-color12" aria-hidden="true"></span><span class="txt font-color03">팝오버 테스트. 팝오버 테스트. 팝오버 테스트.</span></div><div class="popover-item"><span class="bu bg-color10" aria-hidden="true"></span><span class="txt font-color06">팝오버 테스트. 팝오버 테스트. 팝오버 테스트.</span></div></div><button class="btn-close-popover" type="button"><span class="hide-txt">닫기</span><i class="ico-close-popover" aria-hidden="true"></i></button></div></div>';
+        var _type02 = '<div class="popover-area type02"><div class="popover-container"><span class="bu" aria-hidden="true"></span><div class="popover-header"><i class="ico-question" arir-hidden="true"></i><span class="tit">보증기간</span></div><div class="popover-content"><div class="popover-item"><span class="bu bg-color12" aria-hidden="true"></span><span class="txt font-color03">팝오버 테스트. 팝오버 테스트. 팝오버 테스트.</span></div><div class="popover-item"><span class="bu bg-color10" aria-hidden="true"></span><span class="txt font-color06">팝오버 테스트. 팝오버 테스트. 팝오버 테스트.</span></div></div><button class="btn-close-popover" type="button"><span class="hide-txt">닫기</span><i class="ico-close-popover" aria-hidden="true"></i></button></div></div>';
+
+        // 한번만 생성하기 위해서 넣었습니다.
+        if ($('body').attr('_popover') == 'true') {
+            return false;
+        }
+
+        $('body').append(_type01);
+        $('body').append(_type02).attr('_popover','true');
+    }
+
+    // close btn none, block
+    function setCloseBtn (_evt) {
+        if (_evt == 'click') {
+            $closeBtn.css('display','block');
+        } else {
+            $closeBtn.css('display','none');
+        }
+    }
+
+    // 툴팁 or 팝오버 안에 들어갈 text.
+    // html value data-type, data-text, data-text-02 값을 받아옴
+    // type01 = 1줄
+    // type02 = 2줄
+    function changeTxt () {
+        var _dataType =  $el.attr('data-type')
+        var _dataTxt = $el.attr('data-text');
+
+        if (_dataType == 'type01') {
+            $popover.find('.popover-content').text(_dataTxt);
+        } else {
+            var _dataTxt02 = $el.attr('data-text-02');
+
+            $popover.find('.popover-content .desc').eq(0).text(_dataTxt);
+            $popover.find('.popover-content .desc').eq(1).text(_dataTxt02);
+        }
+    }
+
+    // check position, 사용자가 원하는 위치. ex: top, bottom, ...
+    // html value data-position 값을 받아옴
+    function _checkedPosition () {
+        var _position;
+
+        return _position = $el.attr('data-position');
+    }
+
+    function changePosition () {
+        $('.popover-area').css('display','none');
+
+        $left = $el.offset().left;
+        $right = $el.offset().left + $el.width();
+        $top = $el.offset().top;
+        $bottom = $el.offset().top + $el.height();
+
+        var _checkPosition = _checkedPosition();
+
+        // 사용자 지정값에 따른 툴팁 or 팝오버 위치 조정
+        switch (_checkPosition){
+            case 'top'  :
+                // set position of popover or tootip
+                $popover.css('display','block').removeClass('left right top bottom').addClass('top');
+                $popover.offset({top: $top - ($popover.height() + 15) });
+
+            break;
+
+            case 'bottom'  :
+                // set position of popover or tootip
+                $popover.css('display','block').removeClass('left right top bottom').addClass('bottom');
+                $popover.offset({top: $bottom + 20});
+
+            break;
+        }
+    }
+
+}
+
+// ui-popover 실행 함수
+var uiPopoverFunc = function () {
+    var $el;
+
+    this.init = function (_el) {
+        $el = _el;
+
+        bindEvent();
+    }
+
+    function bindEvent () {
+        var uiPopover = new PopoverTootip();
+        uiPopover.init({
+            el : $el,
+            evt : 'click'
+        });
+    }
+}
+
+// ui-tooltip 실행 함수
+var uiTooltipFunc = function () {
+    var $el;
+
+    this.init = function (_el) {
+        $el = _el;
+
+        bindEvent();
+    }
+
+    function bindEvent () {
+        var uiTooltip = new PopoverTootip();
+        uiTooltip.init({
+            el : $el,
+            evt : 'mouseenter'
+        });
+    }
+}
+
+// 인풋에 파일 등록 시, 이름을 추가합니다.
+var inputFileName = function () {
+    var $el, $fileTarget, $nameTarget, $addBtn;
+
+    this.init = function (_el) {
+        $el = $(_el);
+        $fileTarget = $el.find('.ui-file-space');
+        $nameTarget = $el.find('.ui-name-space');
+        $addBtn = $el.find('.ui-add-btn');
+
+        bindEvent();
+    }
+
+    function bindEvent () {
+        $fileTarget.on('change', function(){
+            var _this = $(this);
+
+            changeName(_this);
+        });
+
+        $addBtn.on('click', function () {
+            var _this = $(this)
+
+            clearName(_this);
+        })
+    }
+
+    function getName (_this) {
+        return _filename = (window.FileReader) ? _this[0].files[0].name : _this.val().split('/').pop().split('\\').pop();
+    }
+
+    function changeName (_this) {
+        var _name = getName(_this);
+
+        $nameTarget.val(_name);
+        $nameTarget.siblings().addClass('on');
+
+
+        $addBtn.addClass('on');
+    }
+
+    function clearName (_this) {
+        $nameTarget.val('');
+        $nameTarget.siblings().removeClass('on');
+
+        // 등록버튼 비활성화
+        _this.removeClass('on');
+    }
+}
+
+// tab function
+var tabFunc = function () { // ui-tab-wrap
+    var $el, $btn, $cont;
+
+    this.init = function (_el) {
+        $el = $(_el);
+        $btn = ! $el.find('.ui-tab-btn').hasClass('swiper-slide') ? $el.find('.ui-tab-btn') : $el.find('.ui-tab-btn > .btn-coordinate');
+        $cont = $el.find('.ui-tab-section');
+
+        $cont.eq(0).css('display','block');
+
+        bindEvent();
+    }
+
+    function bindEvent () {
+        for (var i = 0; i < $btn.length; i++) {
+            (function (i) {
+                $btn.eq(i).on('click', function (e) {
+                    e.preventDefault();
+
+                    var _thisIdx = $('.i-code-box').length > 0 ? i - 1 :  i;
+
+                    if (!$el.find('.ui-tab-btn').hasClass('swiper-slide')) {
+                        $btn.removeClass('on');
+                        $btn.eq(i).addClass('on');
+                    } else {
+                        $btn.parent().removeClass('on');
+                        $btn.eq(i).parent().addClass('on');
+                    }
+
+
+                    $cont.css('display','none');
+                    $cont.eq(_thisIdx).css('display','block');
+
+                    if ($('.i-code-box').length > 0 && _thisIdx == -1) {
+                        $cont.css('display','block');
+                    }
+                })
+            })(i);
+        }
+    }
+}
+
+var progressBar = function () {
+    var $el;
+
+    this.init = function (_el) {
+        $el = $(_el)
+
+        bindEvent();
+    }
+
+    function bindEvent () {
+        var _txt = $el.find('.count .num').text();
+        var _res = _txt.slice(0);
+
+        $el.attr('data-progress', _res);
+    }
+}
+
+var headerFunc = function () {
+    var $el, $gnbCont, $lnb, $openBtn, $closeBtn, $dimm;
+
+    var $scroll;
+
+    var $controller, $lnbScene, $infoScene;
+
+    this.init = function (_el) {
+        $el = $(_el);
+
+        $gnbCont = $('.gnb-wrap');
+        $openBtn = $el.find('.btn-all-menu');
+        $closeBtn = $gnbCont.find('.close');
+
+        $dimm = $('.dimm');
+
+        $lnb = $('.lnb-tab-menu');
+
+        $scroll = false;
+
+        setGnb();
+        setAllSticky();
+
+        // lnb swiper
+        (function lnb () {
+            var $el = $('.lnb-tab-menu');
+
+            var _w = 0;
+
+            $el.find('.swiper-slide').each(function (_idx, _data) {
+                var _t = $(_data);
+
+                _w += _t.outerWidth(true);
+            })
+
+            if ( _w < $el.find('.swiper-wrapper').width()) {
+
+                $el.find('.swiper-button-next').css('display','none');
+                $el.find('.swiper-button-prev').css('display','none');
+
+                return false;
+            }
+
+            var activeIndex = $el.find('.menu-link.on').index();
+
+            // swiper
+            window.$lnbSwiper = new Swiper($el.find('.swiper-container'), {
+                slidesPerView: 'auto',
+                centeredSlides: true,
+                centeredSlidesBounds: true,
+                watchOverflow: true,
+                on: {
+                    init : function () {
+                        this.slideTo(activeIndex)
+                    }
+                }
+            });
+        })();
+
+        // top banner
+        if ($('.top-banner')[0]) {
+            $('.btn-close-banner').on('click', function () {
+                $(this).parents('.top-banner').css('display','none');
+
+                destroySticky();
+                setAllSticky();
+            })
+        }
+
+        // scroll
+        $(window).on('scroll touchmove', function (e) {
+            var _scrollTop = $(window).scrollTop();
+
+            // gnb fixed
+            if (_scrollTop == 0 && $scroll == true) {
+                $el.removeClass('fixed');
+
+                $scroll = false;
+
+            } else if (_scrollTop > 0 && $scroll == false) {
+                $el.addClass('fixed');
+
+                $scroll = true;
+            }
+
+            // lnb 와 겹칠 때, gnb 울라감
+            moveGnb();
+        })
+
+        $(window).on('resize', function () {
+            destroySticky();
+            setAllSticky();
+        })
+
+    }
+
+    function setGnb () {
+        $openBtn.on('click', function () {
+            open();
+        })
+
+        $closeBtn.on('click', function () {
+            close();
+        })
+
+        $dimm.on('click', function () {
+            close();
+        })
+
+        _clickList();
+        _clickMyPage();
+    }
+
+    function open () {
+        var _ease = CustomEase.create("custom", ".4,.31,.19,1"),
+            _duration = 0.8;
+
+        TweenMax.fromTo($gnbCont, _duration, {'display' : 'block', x: $gnbCont.width()}, {x: 0, ease: _ease});
+        TweenMax.fromTo($dimm, _duration, {opacity: 0}, {opacity: 0.8, 'display': 'block', ease: Power4.easeOut});
+
+        $('html, body').css('overflow','hidden');
+    }
+
+    function close () {
+        var _ease = CustomEase.create("custom", ".4,.31,.19,1"),
+            _duration = 0.8;
+
+        TweenMax.to($gnbCont, _duration, {x: $(window).width(), 'display' : 'none', ease: _ease});
+        TweenMax.to($dimm, _duration, {opacity: 0, 'display': 'none', ease: Power4.easeOut});
+
+        $('html, body').css('overflow','visible');
+    }
+
+    function _clickList () {
+        var _1depth = $gnbCont.find('.gnb-1depth-item'),
+            _btn = _1depth.find('.gnb-1depth-link'),
+            _cont = _1depth.find('.gnb-2depth-item');
+
+
+        $('.gnb-1depth-link.on').next().css('display','block');
+
+        _btn.on('click', function () {
+            if (!$(this).hasClass('on')) {
+                _btn.removeClass('on');
+                $(this).addClass('on');
+
+                _cont.slideUp();
+                $(this).siblings('.gnb-2depth-item').stop().slideDown();
+            } else {
+                _btn.removeClass('on');
+                _cont.stop().slideUp();
+            }
+        })
+    }
+
+    function _clickMyPage () {
+        var _myPageBtn = $gnbCont.find('.ui-btn-mypage'),
+            _myPageList = $gnbCont.find('.header-mypage-list');
+
+        $('.ui-btn-mypage.on').next().css('display','block');
+
+        _myPageBtn.on('click', function () {
+            if (!_myPageBtn.hasClass('on')) {
+                _myPageBtn.addClass('on');
+                _myPageList.stop().slideDown(300);
+
+            } else {
+                _myPageList.stop().slideUp(300);
+                _myPageBtn.removeClass('on');
+
+
+            }
+        })
+
+        // 개인정보 클릭
+        _myPageList.find('button.link').on('click', function () {
+            close();
+            TweenMax.to($dimm, 1, {opacity: 0.8, 'display': 'block'});
+        })
+    }
+
+    // lnb 와 닿을 때, 위로 이동
+    function moveGnb () {
+        if (!$lnb[0]) return false;
+
+        var _headerHeight = 52;
+
+        var _scrollTop = $(window).scrollTop();
+        var _overlapTiming = $lnb.offset().top - _headerHeight;
+
+        if (_scrollTop >= _overlapTiming) {
+            $el.css('top', _overlapTiming - _scrollTop);
+
+            $('.sub-page-title-area').addClass('scroll');
+        }
+        if (_scrollTop <= 0) {
+            $el.css('top', 0);
+
+            $('.sub-page-title-area').removeClass('scroll');
+        }
+    }
+
+    function setAllSticky () {
+        $controller = new ScrollMagic.Controller({globalSceneOptions: {triggerHook: "onLeave"}});
+
+        setTimeout(function () {
+            fixedLnb();
+            fixedInfo();
+        }, 0)
+    }
+
+    // fixed lnb
+    function fixedLnb () {
+        if (!$lnb[0]) return false;
+
+        var _fixedEl = $('.lnb-tab-menu').parents('.section-a');
+        var _duration = ( !$('.ui-fixed-info')[0] ) ? $('body').height() * 100 : ( $('.ui-fixed-info').offset().top - _fixedEl.offset().top ) - _fixedEl.height();
+
+        $lnbScene = new ScrollMagic.Scene({
+            offset: $lnb.offset().top,
+            duration: _duration
+        })
+        .setPin(_fixedEl[0], {pushFollowers: false})
+        .addTo($controller)
+
+        .on('enter', function () {
+            if ($('.poge-li01-container')[0]) return false;
+            _fixedEl.addClass('lnb-zindex');
+        })
+        .on('leave', function () {
+            if ($('.poge-li01-container')[0]) return false;
+            _fixedEl.removeClass('lnb-zindex')
+        })
+    }
+
+    function fixedInfo () {
+        var _fixedEl = $('.ui-fixed-info');
+
+        if (!_fixedEl[0]) return false;
+
+        $infoScene = new ScrollMagic.Scene({
+            offset: _fixedEl.offset().top,
+            duration: $('body').height()
+        })
+        .setPin(_fixedEl[0], {pushFollowers: false})
+        .addTo($controller);
+    }
+
+    function destroySticky () {
+        if (!$lnb[0]) return false;
+
+        $controller.destroy(true);
+        $lnbScene.destroy(true);
+
+        if (!$('.ui-fixed-info')[0]) return false;
+
+        $infoScene.destroy(true);
+    }
+}
+
+// 평으로 보기
+var CheckSwitch = function () {
+    var $el, $input, $m, $p;
+
+    this.init = function (_el) {
+        $el = $(_el);
+        $input = $el.find('input');
+        $m = $el.find('.ui-unit-m');
+        $p = $el.find('.ui-unit-p')
+
+        bindEvent();
+    }
+
+    function bindEvent () {
+        $input.on('click', function () {
+            $m = $el.find('.ui-unit-m');
+            $p = $el.find('.ui-unit-p')
+
+            if ($(this).is(':checked') == true) {
+                $(this).addClass('checked');
+
+                $m.css('display', 'none');
+                $p.css('display', 'block');
+            } else {
+                $(this).removeClass('checked');
+
+                $m.css('display', 'block');
+                $p.css('display', 'none');
+            }
+        })
+    }
+}
+
+
+// side content
+var sideNoticeArea = function () {
+    var $el, $btn, $dimm, $ex_Z_Index;
+
+    this.init = function  (_el) {
+        $el = $(_el);
+        $btn = $el.find('.open-btn');
+        $dimm = $('.dimm');
+
+        $ex_Z_Index = $el.css('z-index');
+
+
+        if ($('.apt-side-menu-on')[0] && $('.subscribe-pop-area').is(':visible') == false) {
+            $el.addClass('on');
+
+            TweenMax.set($dimm, {opacity: 0.8, 'display': 'block'});
+            TweenMax.set($el, {y: - $el.height(), 'z-index' : 200});
+
+            // hide side content
+            setTimeout(function () {
+                $el.removeClass('on');
+                closeMotion(function () {
+                    // $('html, body').removeAttr('style');
+                });
+            }, 1000)
+        }
+
+        bindEvents();
+    };
+
+    function bindEvents () {
+        $btn.on('click', function (e) {
+            e.preventDefault();
+
+            if (!$el.hasClass('on')) {
+                $el.addClass('on');
+
+                openMotion();
+
+            } else {
+                $el.removeClass('on');
+
+                closeMotion();
+            }
+        })
+
+        $dimm.on('click', function () {
+            $el.removeClass('on');
+
+            closeMotion();
+        })
+    }
+
+    function openMotion () {
+        var _ease = CustomEase.create("custom", ".4,.31,.19,1"),
+            _duration = 1;
+
+        $el.css({'z-index': 200})
+        TweenMax.to($el, _duration, {y: - $el.height(), ease: _ease, });
+
+        // dimm
+        TweenMax.fromTo($dimm, 0.4, {opacity: 0}, {opacity: 0.8, 'display': 'block', ease: Power4.easeOut});
+    }
+
+    function closeMotion (_callback) {
+        var _ease = CustomEase.create("custom", ".4,.31,.19,1"),
+            _duration = 1;
+
+        TweenMax.to($el, _duration, {y: 0, ease: _ease, onComplete: function () {
+            $el.css({'z-index': $ex_Z_Index,})
+        }});
+
+        // dimm
+        TweenMax.to($dimm, 0.4, {opacity: 0, 'display': 'none', ease: Power4.easeOut});
+    }
+};
+
+var moSelectOnchange = function(){
+    var el,select,selectbtn;
+
+    function init(_el){
+        el = $(_el);
+        select = el.find('select')
+        selectbtn = el.find('button')
+        bindEvents();
+
+    }
+
+    function bindEvents(e){
+        (selectbtn.length > 0)? btnBind() : selectbind();
+    }
+
+    function selectbind() {
+        select.on('change',function(){
+            if(this.value == 0) {
+                return false;
+            }
+            location.href = this.value;
+        })
+    }
+    function btnBind() {
+
+        // selectbtn.on('click',function(){
+        //     if(this.value == 0) {
+        //         return false;
+        //     }
+        //     location.href = select.value;
+        // })
+    }
+
+    return {
+        init: init
+    };
+}
+
+// var moveTop = function () {
+//     this.init = function () {
+//         bindEvent();
+//     };
+
+//     function bindEvent () {
+//         if ($('.apt-side-menu-on')[0]) return false;
+
+//         setTimeout(function () {
+//             var _targetTop = $('.lnb-tab-menu').offset().top;
+
+//             TweenMax.set($('html, body'), { scrollTo: { y: _targetTop }})
+//         },0)
+//     }
+// }
